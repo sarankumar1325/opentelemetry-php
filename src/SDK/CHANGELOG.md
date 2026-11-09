@@ -32,6 +32,10 @@ upgraders can check them in one place.
   example by `SdkAutoloader::autoload()`. The callback used to be dropped. A callback that throws no longer keeps the
   root span from ending ([#2120]).
 
+- `ExportingReader` no longer exports metrics that have no data points, for example an asynchronous instrument
+  whose callbacks observed nothing in a collection, or a counter that was never used. They used to go out with an
+  empty data point list, which Prometheus' OTLP endpoint rejects together with the rest of the batch ([#2126]).
+
 ## 1.16.1 - 2026-11-06
 
 ### Security
@@ -180,4 +184,5 @@ See the [GitHub releases](https://github.com/opentelemetry-php/sdk/releases).
 [#2113]: https://github.com/open-telemetry/opentelemetry-php/pull/2113
 [#2115]: https://github.com/open-telemetry/opentelemetry-php/pull/2115
 [#2120]: https://github.com/open-telemetry/opentelemetry-php/pull/2120
+[#2126]: https://github.com/open-telemetry/opentelemetry-php/pull/2126
 [GHSA-fc6f-cp96-6g5w]: https://github.com/open-telemetry/opentelemetry-php/security/advisories/GHSA-fc6f-cp96-6g5w

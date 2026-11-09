@@ -417,6 +417,10 @@ class BatchLogRecordProcessorTest extends MockeryTestCase
             $meterProvider,
         );
 
+        // counters only have data points once a record went through the processor
+        $processor->onEmit($this->createStub(ReadWriteLogRecord::class));
+        $processor->forceFlush();
+
         $reader->collect();
         $this->assertEquals(
             [

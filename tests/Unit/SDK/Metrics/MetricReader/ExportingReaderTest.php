@@ -181,6 +181,42 @@ final class ExportingReaderTest extends TestCase
         $reader->shutdown();
     }
 
+    /**
+     * @see https://github.com/open-telemetry/opentelemetry-php/issues/2052
+     */
+    public function test_collect_does_not_export_metrics_without_data_points(): void
+    {
+        $exporter = new InMemoryExporter(temporality: Temporality::CUMULATIVE);
+        $reader = new ExportingReader($exporter);
+        $meterProvider = MeterProviderFactory::create(new TestClock(), $reader);
+        $meter = $meterProvider->getMeter('test');
+
+        $gauge = $meter->createObservableGauge('never.observed');
+        $gauge->observe(static function (): void {
+        });
+        $counter = $meter->createCounter('always.counted');
+        $counter->add(1);
+
+        $this->assertTrue($reader->collect());
+        $this->assertSame(['always.counted'], array_column($exporter->collect(), 'name'));
+    }
+
+    public function test_collect_does_not_call_exporter_when_no_metric_has_data_points(): void
+    {
+        $exporter = $this->createMock(MetricExporterWithTemporalityInterface::class);
+        $exporter->method('temporality')->willReturn(Temporality::CUMULATIVE);
+        $exporter->expects($this->never())->method('export');
+        $reader = new ExportingReader($exporter);
+        $meterProvider = MeterProviderFactory::create(new TestClock(), $reader);
+        $meter = $meterProvider->getMeter('test');
+
+        $counter = $meter->createObservableCounter('never.observed');
+        $counter->observe(static function (): void {
+        });
+
+        $this->assertTrue($reader->collect());
+    }
+
     public function test_shutdown_exports_metrics(): void
     {
         $exporter = $this->createMock(MetricExporterWithTemporalityInterface::class);

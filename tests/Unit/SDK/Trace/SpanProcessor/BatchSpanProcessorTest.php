@@ -472,6 +472,10 @@ class BatchSpanProcessorTest extends MockeryTestCase
             $meterProvider,
         );
 
+        // counters only have data points once a span went through the processor
+        $processor->onEnd($this->createSampledSpanMock());
+        $processor->forceFlush();
+
         $reader->collect();
         $this->assertEquals(
             [

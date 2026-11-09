@@ -12,6 +12,9 @@ use OpenTelemetry\API\Metrics\UpDownCounterInterface;
 use OpenTelemetry\SDK\Metrics\AggregationInterface;
 use OpenTelemetry\SDK\Metrics\AggregationTemporalitySelectorInterface;
 use OpenTelemetry\SDK\Metrics\Data\DataInterface;
+use OpenTelemetry\SDK\Metrics\Data\Gauge;
+use OpenTelemetry\SDK\Metrics\Data\Histogram;
+use OpenTelemetry\SDK\Metrics\Data\Sum;
 use OpenTelemetry\SDK\Metrics\DefaultAggregationProviderInterface;
 use OpenTelemetry\SDK\Metrics\DefaultAggregationProviderTrait;
 use OpenTelemetry\SDK\Metrics\MetricExporterInterface;
@@ -90,6 +93,12 @@ final class ExportingReader implements MetricReaderInterface, MetricSourceRegist
         }
     }
 
+    private static function hasNoDataPoints(DataInterface $data): bool
+    {
+        return ($data instanceof Gauge || $data instanceof Sum || $data instanceof Histogram)
+            && $data->dataPoints === [];
+    }
+
     private function countDataPoints(DataInterface $data): int
     {
         return $data->dataPointCount();
@@ -165,8 +174,18 @@ final class ExportingReader implements MetricReaderInterface, MetricSourceRegist
         }
 
         $metrics = [];
+        $dataPointCount = 0;
         foreach ($this->sources as $source) {
-            $metrics[] = $source->collect();
+            $metric = $source->collect();
+            /** @psalm-suppress RedundantCondition */
+            if (isset($metric->data)) {
+                if (self::hasNoDataPoints($metric->data)) {
+                    // e.g. an asynchronous instrument whose callbacks observed nothing in this cycle
+                    continue;
+                }
+                $dataPointCount += $this->countDataPoints($metric->data);
+            }
+            $metrics[] = $metric;
         }
 
         $durationSeconds = (hrtime(true) - $startNs) / 1_000_000_000;
@@ -174,14 +193,6 @@ final class ExportingReader implements MetricReaderInterface, MetricSourceRegist
 
         if ($metrics === []) {
             return true;
-        }
-
-        $dataPointCount = 0;
-        foreach ($metrics as $metric) {
-            /** @psalm-suppress RedundantCondition */
-            if (isset($metric->data)) {
-                $dataPointCount += $this->countDataPoints($metric->data);
-            }
         }
 
         $this->dataPointInflightCounter?->add($dataPointCount, $this->exporterAttributes);
